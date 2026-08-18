@@ -2,7 +2,7 @@ name: atvavrupa
 
 on:
   schedule:
-    - cron: '*/15 * * * *'
+    - cron: '* * * * *'
   workflow_dispatch:
 
 permissions:
@@ -23,7 +23,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install requests certifi
+          pip install requests certifi streamlink yt-dlp
 
       - name: Execute Python script
         run: |       
@@ -34,5 +34,5 @@ jobs:
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add streams/
-          git commit -m "Stream segments updated $(date +'%Y-%m-%d %H:%M:%S') [skip ci]" || echo "No changes to commit"
+          git commit -m "Stream updated $(date +'%Y-%m-%d %H:%M:%S') [skip ci]" || echo "No changes to commit"
           git push
