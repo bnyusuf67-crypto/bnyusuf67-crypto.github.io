@@ -30,7 +30,7 @@ jobs:
 
       - name: Run Script
         run: |
-          python script.py
+          python trkvz_segment.py
 
       - name: Commit and Push Changes
         run: |
