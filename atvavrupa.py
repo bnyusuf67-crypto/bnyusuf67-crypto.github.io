@@ -105,7 +105,7 @@ def main():
     
     for ts_file in final_ts_files:
         m3u8_content += "#EXTINF:10.0,\n"
-        m3u8_content += f"{ts_file}\n"
+        m3u8_content += f"https://bnyusuf67-crypto.github.io/{ts_file}\n"
         
     with open(M3U8_FILENAME, "w", encoding="utf-8") as f:
         f.write(m3u8_content)
