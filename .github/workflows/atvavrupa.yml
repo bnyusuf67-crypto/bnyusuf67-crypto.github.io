@@ -1,4 +1,5 @@
 name: atvavrupa
+
 on:
   schedule:
     - cron: '*/10 * * * *'
@@ -11,25 +12,26 @@ jobs:
   sync-stream:
     runs-on: ubuntu-latest
     steps:
-      - name: Derinlik 1 ile Hızlı Klonla
+      - name: Depoyu Klonla
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
 
-      - name: Set up Python
+      - name: Python Kurulumu
         uses: actions/setup-python@v5
         with:
           python-version: '3.x'
 
-      - name: Hafif Bağımlılık Kurulumu
-        run: pip install --no-cache-dir requests -qq
+      - name: Gereklilikleri Yükle
+        run: |
+          pip install --no-cache-dir streamlink requests -qq
 
-      - name: Scripti Çalıştır
-        run: python3 atvavrupa.py 
+      - name: Python Scriptini Çalıştır
+        run: python3 atvavrupa.py
 
-      - name: Hızlı Commit & Push
+      - name: Değişiklikleri GitHub'a Gönder
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add streams/
-          git diff --quiet && git diff --staged --quiet || (git commit -m "Fast sync: $(date +'%Y-%m-%d %H:%M:%S')" && git push)
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Auto sync streams: $(date +'%Y-%m-%d %H:%M:%S')" && git push)
