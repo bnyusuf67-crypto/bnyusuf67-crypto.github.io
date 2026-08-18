@@ -7,10 +7,25 @@ from concurrent.futures import ThreadPoolExecutor
 STREAM_DIR = "streams"
 M3U8_FILENAME = os.path.join(STREAM_DIR, "atvavrupa.m3u8")
 SEQUENCE_FILE = os.path.join(STREAM_DIR, "sequence.txt")
-MAX_SEGMENTS = 60
+MAX_SEGMENTS = 100  # Arabelleği genişletmek için 100 yapıldı
 
-# GitHub Pages adresin
 BASE_URL = "https://bnyusuf67-crypto.github.io/streams/"
+
+def get_ts_duration(fpath):
+    """ffprobe kullanarak .ts dosyasının gerçek süresini saniye cinsinden döner."""
+    try:
+        cmd = [
+            "ffprobe", "-v", "error", 
+            "-show_entries", "format=duration", 
+            "-of", "default=noprint_wrappers=1:nokey=1", 
+            fpath
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=3)
+        if result.returncode == 0 and result.stdout.strip():
+            return float(result.stdout.strip())
+    except:
+        pass
+    return 10.0  # Okunamazsa varsayılan 10 saniye
 
 def download_segment(args):
     fname, url = args
@@ -26,7 +41,6 @@ def download_segment(args):
         pass
 
 def get_next_sequence():
-    """Kaldığı yerden devam etmek için sequence numarasını oku ve artır"""
     seq = 0
     if os.path.exists(SEQUENCE_FILE):
         try:
@@ -64,21 +78,19 @@ def main():
         
         target_urls = [l if l.startswith("http") else base_url + l for l in lines[-MAX_SEGMENTS:]]
         
-        # Mevcut sequence numarasını al (Her çalıştırmada artar)
         start_seq = get_next_sequence()
         
-        # Segmentleri sırayla isimlendir (Örn: seg_100.ts, seg_101.ts...)
         target_files = {}
         for i, url in enumerate(target_urls):
             current_seq_num = start_seq + i
             fname = f"seg_{current_seq_num}.ts"
             target_files[fname] = url
 
-        # 3. POOL (ThreadPoolExecutor) İLE HIZLI İNDİRME
+        # 3. ThreadPoolExecutor İle Hızlı İndirme
         with ThreadPoolExecutor(max_workers=10) as executor:
             executor.map(download_segment, target_files.items())
 
-        # 4. Eski segmentleri temizle ve yeni sequence'i kaydet
+        # 4. Eski segmentleri temizle ve sequence'i kaydet
         existing_files = set(os.path.basename(f) for f in glob.glob(os.path.join(STREAM_DIR, "*.ts")))
         for fname in (existing_files - set(target_files.keys())):
             try:
@@ -86,22 +98,23 @@ def main():
             except:
                 pass
                 
-        # Bir sonraki çalıştırda kaldığı yerden devam etmesi için sequence'i güncelle
         new_start_seq = start_seq + len(target_urls) - MAX_SEGMENTS
         if new_start_seq < 0:
             new_start_seq = 0
         save_sequence(new_start_seq)
 
-        # 5. M3U8 dosyasını dinamik sequence ile yaz
+        # 5. M3U8 dosyasını gerçek süreler (ffprobe) ile yaz
         media_sequence = start_seq
         with open(M3U8_FILENAME, "w") as f:
-            f.write(f"#EXTM3U\n")
-            f.write(f"#EXT-X-VERSION:3\n")
+            f.write("#EXTM3U\n")
+            f.write("#EXT-X-VERSION:3\n")
             f.write(f"#EXT-X-MEDIA-SEQUENCE:{media_sequence}\n")
-            f.write(f"#EXT-X-TARGETDURATION:10\n")
+            f.write("#EXT-X-TARGETDURATION:10\n") # Güvenli hedef süre
             
             for fname in sorted(target_files.keys(), key=lambda x: int(x.split('_')[1].split('.')[0])):
-                f.write(f"#EXTINF:10.0,\n{BASE_URL}{fname}\n")
+                fpath = os.path.join(STREAM_DIR, fname)
+                duration = get_ts_duration(fpath)
+                f.write(f"#EXTINF:{duration:.3f},\n{BASE_URL}{fname}\n")
 
     except: 
         pass
