@@ -7,25 +7,9 @@ from concurrent.futures import ThreadPoolExecutor
 STREAM_DIR = "streams"
 M3U8_FILENAME = os.path.join(STREAM_DIR, "atvavrupa.m3u8")
 SEQUENCE_FILE = os.path.join(STREAM_DIR, "sequence.txt")
-MAX_SEGMENTS = 100  # Arabelleği genişletmek için 100 yapıldı
+MAX_SEGMENTS = 100
 
 BASE_URL = "https://bnyusuf67-crypto.github.io/streams/"
-
-def get_ts_duration(fpath):
-    """ffprobe kullanarak .ts dosyasının gerçek süresini saniye cinsinden döner."""
-    try:
-        cmd = [
-            "ffprobe", "-v", "error", 
-            "-show_entries", "format=duration", 
-            "-of", "default=noprint_wrappers=1:nokey=1", 
-            fpath
-        ]
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=3)
-        if result.returncode == 0 and result.stdout.strip():
-            return float(result.stdout.strip())
-    except:
-        pass
-    return 10.0  # Okunamazsa varsayılan 10 saniye
 
 def download_segment(args):
     fname, url = args
@@ -103,18 +87,16 @@ def main():
             new_start_seq = 0
         save_sequence(new_start_seq)
 
-        # 5. M3U8 dosyasını gerçek süreler (ffprobe) ile yaz
+        # 5. M3U8 dosyasını sabit 10 saniye hedef süreyle yaz
         media_sequence = start_seq
         with open(M3U8_FILENAME, "w") as f:
             f.write("#EXTM3U\n")
             f.write("#EXT-X-VERSION:3\n")
             f.write(f"#EXT-X-MEDIA-SEQUENCE:{media_sequence}\n")
-            f.write("#EXT-X-TARGETDURATION:10\n") # Güvenli hedef süre
+            f.write("#EXT-X-TARGETDURATION:10\n") # Doğru hedef süre
             
             for fname in sorted(target_files.keys(), key=lambda x: int(x.split('_')[1].split('.')[0])):
-                fpath = os.path.join(STREAM_DIR, fname)
-                duration = get_ts_duration(fpath)
-                f.write(f"#EXTINF:{duration:.3f},\n{BASE_URL}{fname}\n")
+                f.write(f"#EXTINF:10.0,\n{BASE_URL}{fname}\n")
 
     except: 
         pass
