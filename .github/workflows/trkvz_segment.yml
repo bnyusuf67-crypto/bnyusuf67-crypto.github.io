@@ -3,7 +3,7 @@ name: Turkuvaz M3U8 Generator
 on:
   workflow_dispatch:
   schedule:
-    - cron: '*/1 * * * *' # TS linklerinin tazeliğini korumak için her 15 dakikada bir çalışır
+    - cron: '*/15 * * * *' # TS linklerinin tazeliğini korumak için her 15 dakikada bir çalışır
 
 jobs:
   build:
