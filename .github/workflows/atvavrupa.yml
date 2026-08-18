@@ -22,7 +22,7 @@ jobs:
           cache: 'pip'
 
       - name: Kurulum
-        run: pip install -q -r requirements.txt
+        run: pip install -q streamlink requests
 
       - name: Çalıştır
         run: python3 atvavrupa.py
