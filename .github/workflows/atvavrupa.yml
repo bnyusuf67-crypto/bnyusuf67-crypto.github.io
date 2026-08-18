@@ -9,29 +9,28 @@ permissions:
   contents: write
 
 jobs:
-  sync-stream:
+  sync:
     runs-on: ubuntu-latest
     steps:
-      - name: Depoyu Klonla
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 1
 
-      - name: Python Kurulumu
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.x'
+          cache: 'pip'
 
-      - name: Gereklilikleri Yükle
-        run: |
-          pip install --no-cache-dir streamlink requests -qq
+      - name: Kurulum
+        run: pip install -q streamlink requests
 
-      - name: Python Scriptini Çalıştır
+      - name: Çalıştır
         run: python3 atvavrupa.py
 
-      - name: Değişiklikleri GitHub'a Gönder
+      - name: Git Push
         run: |
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          git config --local user.name "github-actions[bot]"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
           git add streams/
-          git diff --quiet && git diff --staged --quiet || (git commit -m "Auto sync streams: $(date +'%Y-%m-%d %H:%M:%S')" && git push)
+          git commit -m "Sync $(date +'%H:%M')" || exit 0
+          git push
