@@ -12,27 +12,28 @@ jobs:
   sync-stream:
     runs-on: ubuntu-latest
     steps:
-      - name: Repoyu Klonla
+      - name: Repoyu Klonla (Derinlik 1 - Hızlı)
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 1 # Tüm git geçmişini çekmez, sadece son hali alır (Çok hızlandırır)
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.x'
 
-      - name: Gerekli Araçları Kur
+      - name: Hızlı Bağımlılık Kurulumu
         run: |
-          sudo apt-get update && sudo apt-get install -y ffmpeg
-          python -m pip install --upgrade pip
-          pip install streamlink requests
+          sudo apt-get install -y ffmpeg -qq
+          pip install --no-cache-dir streamlink requests -qq
 
       - name: Scripti Çalıştır
         run: python3 atvavrupa.py 
 
-      - name: Commit & Push
+      - name: Hızlı Git Commit & Push
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add streams/
-          git commit -m "Live stream sync: $(date +'%Y-%m-%d %H:%M:%S')" || echo "No changes"
+          git commit -m "Refreshed at: $(date +'%H:%M')" || echo "No changes"
           git push
