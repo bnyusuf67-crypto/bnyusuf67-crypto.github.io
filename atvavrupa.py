@@ -6,8 +6,8 @@ import requests
 STREAM_DIR = "streams"
 M3U8_FILENAME = os.path.join(STREAM_DIR, "atvavrupa.m3u8")
 
-# İstediğiniz gibi ts değişkeni tanımlandı ve limit belirlendi
-ts = 6  # İlk denemede indirilecek ve havuzda tutulacak maksimum segment sayısı
+# Havuzda tutulacak toplam segment sınırı (Örn: 10 dakikalık cron için ideal havuz boyutu)
+ts = 30  # İsteğinize göre artırıp azaltabilirsiniz (Örn: 30 segment = daha uzun arşiv)
 
 os.makedirs(STREAM_DIR, exist_ok=True)
 
@@ -17,7 +17,7 @@ def fetch_and_save_segment(index_id):
         filename = f"seg_{index_id}.ts"
         filepath = os.path.join(STREAM_DIR, filename)
         
-        # Gerçek indirme kodunuz buraya gelecek
+        # Gerçek indirme kodunuz buraya gelecek (yt-dlp veya token istekleri)
         with open(filepath, 'wb') as f:
             f.write(b"") # Test aşaması için boş dosya
             
@@ -47,7 +47,7 @@ def update_m3u8_playlist():
 def main():
     existing_ts = sorted(glob.glob(os.path.join(STREAM_DIR, "*.ts")))
     
-    # İLK ÇALIŞTIRMA (Klasör boşsa anında ts kadar segment indirip havuzu doldurur)
+    # İLK ÇALIŞTIRMA (Klasör boşsa anında 'ts' kadar segment indirip havuzu doldurur)
     if len(existing_ts) == 0:
         print(f"İlk çalıştırılma: Havuz boş. Anında {ts} adet segment indiriliyor...")
         for i in range(ts):
@@ -56,13 +56,15 @@ def main():
             if i < ts - 1:
                 time.sleep(1)
                 
-    # SONRAKİ ÇALIŞMALAR (Periyodik güncelleme)
+    # PERİYODİK ÇALIŞMA (Her 10 dakikada bir çalışarak yeni segmentleri ekler ve eskiyi temizler)
     else:
-        print("Periyodik güncelleme: Yeni segment ekleniyor...")
+        print("10 dakikalık periyodik güncelleme tetiklendi...")
+        
+        # 10 dakikalık sürede biriken boşluğu kapatmak için yeni segment(ler) ekle
         unique_id = int(time.time())
         fetch_and_save_segment(unique_id)
         
-        # Sınırı aştıysa en eskisini sil
+        # Belirlenen 'ts' sınırını aşan eski dosyaları temizle
         existing_ts = sorted(glob.glob(os.path.join(STREAM_DIR, "*.ts")))
         if len(existing_ts) > ts:
             for old_file in existing_ts[:-ts]:
