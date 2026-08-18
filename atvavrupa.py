@@ -2,114 +2,67 @@ import os
 import glob
 import requests
 import subprocess
+import time
 
 STREAM_DIR = "streams"
 M3U8_FILENAME = os.path.join(STREAM_DIR, "atvavrupa.m3u8")
-ts = 30  # Havuzda tutulacak maksimum segment sınırı
+MAX_TS = 30 
 
-os.makedirs(STREAM_DIR, exist_ok=True)
-
-def get_live_segment_urls():
-    """Streamlink kullanarak ATV Avrupa canlı yayın akışının m3u8 adresini bulur."""
+def get_live_segments():
     try:
-        # Streamlink ile canlı yayının stream URL'sini çekiyoruz
-        # ATV Avrupa resmi canlı yayın web sitesi veya turkuvaz streamlink plugin yapısı
+        # Streamlink ile canlı yayını yakala
         cmd = ["streamlink", "--stream-url", "https://www.atvavrupa.tv/canli-yayin", "best"]
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=25)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
         master_url = result.stdout.strip()
         
-        if not master_url or "error" in master_url.lower():
-            print(f"Streamlink URL çözemedi: {result.stderr.strip()}")
+        if not master_url or "http" not in master_url:
             return []
-            
-        print(f"Çözülen Master URL: {master_url}")
+
+        # m3u8 içeriğini çek ve işle
+        r = requests.get(master_url, timeout=10)
+        lines = r.text.splitlines()
+        base_url = master_url.rsplit('/', 1)[0] + '/'
         
-        # Alınan m3u8 / master listesini indirip içindeki segmentleri okuyoruz
-        res = requests.get(master_url, timeout=10)
-        lines = res.text.splitlines()
-        
-        segment_urls = []
-        base_url_path = "/".join(master_url.split("/")[:-1]) + "/"
-        
-        for line in lines:
-            line = line.strip()
-            if line and not line.startswith("#"):
-                # Göreceli linkleri (relative path) tam URL'ye çeviriyoruz
-                if line.startswith("http"):
-                    segment_urls.append(line)
-                else:
-                    segment_urls.append(base_url_path + line)
-                
-        return segment_urls
+        segments = [line if line.startswith("http") else base_url + line 
+                    for line in lines if line and not line.startswith("#")]
+        return segments[-MAX_TS:]
     except Exception as e:
-        print(f"Streamlink ile canlı segmentler alınırken hata oluştu: {e}")
+        print(f"Hata: {e}")
         return []
 
-def download_segment(segment_url, filepath):
-    """Belirli bir segment URL'sini indirip dosyaya kaydeder."""
-    try:
-        r = requests.get(segment_url, stream=True, timeout=15)
-        if r.status_code == 200:
-            with open(filepath, 'wb') as f:
-                for chunk in r.iter_content(chunk_size=8192):
-                    if chunk:
-                        f.write(chunk)
-            return True
-    except Exception as e:
-        print(f"Segment indirme hatası: {e}")
-    return False
-
 def main():
-    print("Streamlink ile canlı yayın segmentleri taranıyor...")
-    live_segments = get_live_segment_urls()
+    os.makedirs(STREAM_DIR, exist_ok=True)
+    segments = get_live_segments()
     
-    if not live_segments:
-        print("Canlı akıştan segment listesi alınamadı.")
-        return
+    # 1. Yeni segmentleri indir
+    if segments:
+        for url in segments:
+            # Segmentin değişmez ismini URL'den türet
+            fname = f"seg_{abs(hash(url))}.ts"
+            fpath = os.path.join(STREAM_DIR, fname)
+            if not os.path.exists(fpath):
+                try:
+                    r = requests.get(url, timeout=10)
+                    if r.status_code == 200:
+                        with open(fpath, 'wb') as f: f.write(r.content)
+                        print(f"Eklendi: {fname}")
+                except: continue
 
-    # Sadece son 30 segmenti hedefle
-    target_segments = live_segments[-ts:]
-    
-    existing_files = set(os.path.basename(f) for f in glob.glob(os.path.join(STREAM_DIR, "*.ts")))
-    
-    for seg_url in target_segments:
-        # Segment dosya adını URL'den güvenli şekilde türet
-        filename = seg_url.split("/")[-1].split("?")[0]
-        if not filename.endswith(".ts"):
-            filename = f"seg_{abs(hash(seg_url))}.ts"
-            
-        filepath = os.path.join(STREAM_DIR, filename)
-        
-        # Eğer bu segment henüz indirilmemişse indir ve havuza ekle
-        if filename not in existing_files:
-            if download_segment(seg_url, filepath):
-                print(f"Yeni segment eklendi: {filename}")
+    # 2. Temizlik: En eski dosyaları sil
+    all_files = sorted(glob.glob(os.path.join(STREAM_DIR, "*.ts")), key=os.path.getmtime)
+    if len(all_files) > MAX_TS:
+        for f in all_files[:-MAX_TS]:
+            os.remove(f)
 
-    # Havuz boyutunu 'ts' (30) sınırında tutmak için eskileri temizle
-    all_ts_files = sorted(glob.glob(os.path.join(STREAM_DIR, "*.ts")))
-    if len(all_ts_files) > ts:
-        for old_file in all_ts_files[:-ts]:
-            try:
-                os.remove(old_file)
-                print(f"Eski segment temizlendi: {os.path.basename(old_file)}")
-            except Exception as e:
-                print(f"Dosya silinemedi: {e}")
-
-    # Oynatma listesini güncel dosyalara göre yeniden oluştur
-    final_ts_files = sorted([os.path.basename(f) for f in glob.glob(os.path.join(STREAM_DIR, "*.ts"))])
-    
-    m3u8_content = "#EXTM3U\n"
-    m3u8_content += "#EXT-X-VERSION:3\n"
-    m3u8_content += "#EXT-X-TARGETDURATION:10\n"
-    m3u8_content += "#EXT-X-PLAYLIST-TYPE:EVENT\n"
-    
-    for ts_file in final_ts_files:
-        m3u8_content += "#EXTINF:10.0,\n"
-        m3u8_content += f"https://bnyusuf67-crypto.github.io/streams/{ts_file}\n"
-        
-    with open(M3U8_FILENAME, "w", encoding="utf-8") as f:
-        f.write(m3u8_content)
-    print(f"M3U8 oynatma listesi güncellendi. Toplam aktif segment: {len(final_ts_files)}")
+    # 3. M3U8 Dosyasını Güncelle (Canlılık için Zaman Damgalı)
+    final_files = sorted(glob.glob(os.path.join(STREAM_DIR, "*.ts")), key=os.path.getmtime)
+    with open(M3U8_FILENAME, "w") as f:
+        f.write("#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:10\n#EXT-X-PLAYLIST-TYPE:EVENT\n")
+        # Oynatıcının önbelleğini kıran etiket:
+        f.write(f"#EXT-X-PROGRAM-DATE-TIME:{time.strftime('%Y-%m-%dT%H:%M:%SZ')}\n")
+        for ts_file in final_files:
+            f.write(f"#EXTINF:10.0,\n{os.path.basename(ts_file)}\n")
+    print(f"M3U8 güncellendi. Segment sayısı: {len(final_files)}")
 
 if __name__ == "__main__":
     main()
