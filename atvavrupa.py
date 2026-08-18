@@ -5,75 +5,55 @@ import requests
 
 STREAM_DIR = "streams"
 M3U8_FILENAME = os.path.join(STREAM_DIR, "atvavrupa.m3u8")
-MAX_SEGMENTS = 15  # Cron süresine göre saklanacak maksimum güncel segment sayısı
+MAX_SEGMENTS = 60 
 
 def main():
     os.makedirs(STREAM_DIR, exist_ok=True)
     
-    # 1. Streamlink ile canlı yayın m3u8 adresini al
+    # 1. Hızlı Streamlink (Time-out ile)
     try:
         cmd = ["streamlink", "--stream-url", "https://www.atvavrupa.tv/canli-yayin", "best"]
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
         stream_url = result.stdout.strip()
-        if not stream_url or not stream_url.startswith("http"):
-            return
-    except Exception:
-        return
+        if not stream_url: return
+    except: return
 
     try:
-        # 2. Ana m3u8 listesini çek
-        headers = {'User-Agent': 'Mozilla/5.0'}
-        r = requests.get(stream_url, headers=headers, timeout=8)
-        if r.status_code != 200:
-            return
+        # 2. M3U8 içeriğini al
+        r = requests.get(stream_url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=5)
+        if r.status_code != 200: return
         
-        lines = r.text.splitlines()
+        lines = [l for l in r.text.splitlines() if l and not l.startswith("#")]
         base_url = stream_url.rsplit('/', 1)[0] + '/'
         
-        # Aktif segment URL'lerini topla
-        active_segments = []
-        for line in lines:
-            if line and not line.startswith("#"):
-                full_url = line if line.startswith("http") else base_url + line
-                active_segments.append(full_url)
+        # Güncel 60 segmentin isimlerini hash ile hazırla
+        target_urls = [l if l.startswith("http") else base_url + l for l in lines[-MAX_SEGMENTS:]]
+        # İsimleri hash ile eşleştir
+        target_files = {f"seg_{abs(hash(url))}.ts": url for url in target_urls}
         
-        # Son güncel segmentleri belirle ve isimlerini hash'le
-        target_segments = active_segments[-MAX_SEGMENTS:]
-        current_filenames = set()
-        
-        for url in target_segments:
-            fname = f"seg_{abs(hash(url))}.ts"
-            current_filenames.add(fname)
+        # 3. İNDİRME OPTİMİZASYONU: Sadece mevcut olmayanları indir
+        for fname, url in target_files.items():
             fpath = os.path.join(STREAM_DIR, fname)
-            
-            # Eğer segment henüz indirilmediyse indir
             if not os.path.exists(fpath):
                 try:
-                    res = requests.get(url, timeout=4)
+                    res = requests.get(url, timeout=3) # Daha kısa timeout
                     if res.status_code == 200:
-                        with open(fpath, 'wb') as f:
-                            f.write(res.content)
-                except:
-                    continue
+                        with open(fpath, 'wb') as f: f.write(res.content)
+                except: continue
 
-        # 3. KESİN TEMİZLİK: Klasörde olup da güncel listede OLMAYAN tüm eski segmentleri sil
-        for fpath in glob.glob(os.path.join(STREAM_DIR, "*.ts")):
-            fname = os.path.basename(fpath)
-            if fname not in current_filenames:
-                try:
-                    os.remove(fpath)
-                except:
-                    pass
+        # 4. TEMİZLİK: Sadece hedefte olmayanları sil (set farkı ile çok hızlı)
+        existing_files = set(os.path.basename(f) for f in glob.glob(os.path.join(STREAM_DIR, "*.ts")))
+        to_delete = existing_files - set(target_files.keys())
+        for fname in to_delete:
+            os.remove(os.path.join(STREAM_DIR, fname))
 
-        # 4. Yerel m3u8 oynatma listesini güncelle
-        final_files = sorted(glob.glob(os.path.join(STREAM_DIR, "*.ts")), key=os.path.getmtime)
+        # 5. M3U8 yazma
         with open(M3U8_FILENAME, "w") as f:
             f.write("#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:10\n#EXT-X-PLAYLIST-TYPE:EVENT\n")
-            for ts_file in final_files:
-                f.write(f"#EXTINF:10.0,\n{os.path.basename(ts_file)}\n")
+            for fname in sorted(target_files.keys()):
+                f.write(f"#EXTINF:10.0,\n{fname}\n")
 
-    except Exception:
-        pass
+    except: pass
 
 if __name__ == "__main__":
     main()
