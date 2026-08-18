@@ -2,7 +2,7 @@ name: atvavrupa
 
 on:
   schedule:
-    - cron: '*/10 * * * *' # Her 10 dakikada bir çalışır (GitHub kuyruğuna takılmaz)
+    - cron: '*/10 * * * *' # Her 10 dakikada bir çalışır
   workflow_dispatch:
 
 permissions:
@@ -20,16 +20,16 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: Install dependencies
+      - name: Install Dependencies & Streamlink
         run: |
           python -m pip install --upgrade pip
-          pip install requests certifi
+          pip install streamlink requests
 
       - name: Execute Python script
         run: |       
           python3 atvavrupa.py 
 
-      - name: Commit & Push
+      - name: Commit & Push Changes
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
