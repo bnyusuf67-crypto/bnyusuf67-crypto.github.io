@@ -22,7 +22,7 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: Hızlı Bağımlılık Kurulumu
+      - name: Hafif Bağımlılık Kurulumu
         run: pip install --no-cache-dir requests -qq
 
       - name: Scripti Çalıştır
@@ -33,5 +33,5 @@ jobs:
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add streams/
-          git commit -m "Updated At: $(date +'%H:%M')" || echo "Değişiklik yok"
+          git commit -m "Refreshed at: $(date +'%Y-%m-%d %H:%M:%S')" || echo "Değişiklik yok"
           git push
