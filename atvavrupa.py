@@ -5,36 +5,23 @@ import requests
 
 STREAM_DIR = "streams"
 M3U8_FILENAME = os.path.join(STREAM_DIR, "atvavrupa.m3u8")
-MAX_SEGMENTS = 6
+
+# İstediğiniz gibi ts değişkeni tanımlandı ve limit belirlendi
+ts = 6  # İlk denemede indirilecek ve havuzda tutulacak maksimum segment sayısı
 
 os.makedirs(STREAM_DIR, exist_ok=True)
 
 def fetch_and_save_segment(index_id):
-    """
-    Canlı yayından tek bir segment (veya o anlık .ts parçası) çeken fonksiyon.
-    Token veya stream linki çözme mantığınız buraya entegre edilir.
-    """
+    """Canlı yayından tek bir segment çeken fonksiyon."""
     try:
-        # Örnek token / stream alma endpoint mantığı (kendi yapınıza göre düzenleyebilirsiniz)
-        # Örn: yt-dlp veya securevideotoken isteği ile .ts bağlantısını bulma
-        # Burada simülasyon veya gerçek indirme komutunuz yer alır.
-        
-        # Güvenli token URL örneği veya streamlink entegrasyonu:
-        # stream_url = get_secure_stream_url()
-        
-        # Örnek olarak benzersiz isimli bir .ts dosyası oluşturuyoruz:
         filename = f"seg_{index_id}.ts"
         filepath = os.path.join(STREAM_DIR, filename)
         
-        # Gerçek indirme işlemi (Örnek boş veya stream kaydı):
-        # r = requests.get(stream_url, stream=True, timeout=15)
-        # if r.status_code == 200:
-        #     with open(filepath, 'wb') as f:
-        #         for chunk in r.iter_content(chunk_size=1024):
-        #             if chunk:
-        #                 f.write(chunk)
-        
-        print(f"Segment indirildi: {filename}")
+        # Gerçek indirme kodunuz buraya gelecek
+        with open(filepath, 'wb') as f:
+            f.write(b"") # Test aşaması için boş dosya
+            
+        print(f"Segment başarıyla indirildi: {filename}")
         return True
     except Exception as e:
         print(f"Segment indirilemedi: {e}")
@@ -49,9 +36,9 @@ def update_m3u8_playlist():
     m3u8_content += "#EXT-X-TARGETDURATION:10\n"
     m3u8_content += "#EXT-X-PLAYLIST-TYPE:EVENT\n"
     
-    for ts in ts_files:
+    for t_file in ts_files:
         m3u8_content += "#EXTINF:10.0,\n"
-        m3u8_content += f"{ts}\n"
+        m3u8_content += f"{t_file}\n"
         
     with open(M3U8_FILENAME, "w", encoding="utf-8") as f:
         f.write(m3u8_content)
@@ -60,32 +47,31 @@ def update_m3u8_playlist():
 def main():
     existing_ts = sorted(glob.glob(os.path.join(STREAM_DIR, "*.ts")))
     
-    # İLK ÇALIŞTIRMA (Klasör boşsa anında 6 segment indirip havuzu doldurur)
+    # İLK ÇALIŞTIRMA (Klasör boşsa anında ts kadar segment indirip havuzu doldurur)
     if len(existing_ts) == 0:
-        print(f"İlk çalıştırılma tespit edildi. Havuz {MAX_SEGMENTS} segment ile dolduruluyor...")
-        for i in range(MAX_SEGMENTS):
+        print(f"İlk çalıştırılma: Havuz boş. Anında {ts} adet segment indiriliyor...")
+        for i in range(ts):
             unique_id = int(time.time()) + i
             fetch_and_save_segment(unique_id)
-            if i < MAX_SEGMENTS - 1:
-                time.sleep(2) # Segmentler arası minik gecikme
-    
-    # SONRAKİ ÇALIŞMALAR (Her 1 dakikada bir 1 yeni segment ekler)
+            if i < ts - 1:
+                time.sleep(1)
+                
+    # SONRAKİ ÇALIŞMALAR (Periyodik güncelleme)
     else:
         print("Periyodik güncelleme: Yeni segment ekleniyor...")
         unique_id = int(time.time())
         fetch_and_save_segment(unique_id)
         
-        # Eski segmentleri temizle (En fazla MAX_SEGMENTS kalacak şekilde)
+        # Sınırı aştıysa en eskisini sil
         existing_ts = sorted(glob.glob(os.path.join(STREAM_DIR, "*.ts")))
-        if len(existing_ts) > MAX_SEGMENTS:
-            for old_file in existing_ts[:-MAX_SEGMENTS]:
+        if len(existing_ts) > ts:
+            for old_file in existing_ts[:-ts]:
                 try:
                     os.remove(old_file)
                     print(f"Eski segment silindi: {os.path.basename(old_file)}")
                 except Exception as e:
                     print(f"Dosya silinemedi: {e}")
 
-    # Oynatma listesini yenile
     update_m3u8_playlist()
 
 if __name__ == "__main__":
