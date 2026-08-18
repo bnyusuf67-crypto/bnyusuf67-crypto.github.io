@@ -22,7 +22,7 @@ jobs:
           cache: 'pip'
 
       - name: Kurulum
-        run: pip install -q streamlink requests
+        run: pip install -q -r requirements.txt
 
       - name: Çalıştır
         run: python3 atvavrupa.py
@@ -32,5 +32,4 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add streams/
-          git commit -m "Sync $(date +'%H:%M')" || exit 0
-          git push
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Sync $(date +'%H:%M')" && git push)
