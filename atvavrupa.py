@@ -7,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 STREAM_DIR = "streams"
 M3U8_FILENAME = os.path.join(STREAM_DIR, "atvavrupa.m3u8")
 SEQUENCE_FILE = os.path.join(STREAM_DIR, "sequence.txt")
-MAX_SEGMENTS = 150
+MAX_SEGMENTS = 160
 
 BASE_URL = "https://bnyusuf67-crypto.github.io/streams/"
 
