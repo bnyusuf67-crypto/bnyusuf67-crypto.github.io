@@ -6,13 +6,13 @@ from concurrent.futures import ThreadPoolExecutor
 
 STREAM_DIR = "streams"
 M3U8_FILENAME = os.path.join(STREAM_DIR, "atvavrupa.m3u8")
+SEQUENCE_FILE = os.path.join(STREAM_DIR, "sequence.txt")
 MAX_SEGMENTS = 60
 
 # GitHub Pages adresin
 BASE_URL = "https://bnyusuf67-crypto.github.io/streams/"
 
 def download_segment(args):
-    """ThreadPool havuzu tarafından aynı anda (paralel) çalıştırılan indirme fonksiyonu."""
     fname, url = args
     fpath = os.path.join(STREAM_DIR, fname)
     if os.path.exists(fpath): 
@@ -24,6 +24,21 @@ def download_segment(args):
                 f.write(res.content)
     except: 
         pass
+
+def get_next_sequence():
+    """Kaldığı yerden devam etmek için sequence numarasını oku ve artır"""
+    seq = 0
+    if os.path.exists(SEQUENCE_FILE):
+        try:
+            with open(SEQUENCE_FILE, "r") as f:
+                seq = int(f.read().strip())
+        except:
+            seq = 0
+    return seq
+
+def save_sequence(seq):
+    with open(SEQUENCE_FILE, "w") as f:
+        f.write(str(seq))
 
 def main():
     os.makedirs(STREAM_DIR, exist_ok=True)
@@ -48,24 +63,44 @@ def main():
         base_url = stream_url.rsplit('/', 1)[0] + '/'
         
         target_urls = [l if l.startswith("http") else base_url + l for l in lines[-MAX_SEGMENTS:]]
-        target_files = {f"seg_{abs(hash(url))}.ts": url for url in target_urls}
         
-        # 3. POOL (ThreadPoolExecutor) İLE HIZLI İNDİRME: Aynı anda 10 segment indirir
+        # Mevcut sequence numarasını al (Her çalıştırmada artar)
+        start_seq = get_next_sequence()
+        
+        # Segmentleri sırayla isimlendir (Örn: seg_100.ts, seg_101.ts...)
+        target_files = {}
+        for i, url in enumerate(target_urls):
+            current_seq_num = start_seq + i
+            fname = f"seg_{current_seq_num}.ts"
+            target_files[fname] = url
+
+        # 3. POOL (ThreadPoolExecutor) İLE HIZLI İNDİRME
         with ThreadPoolExecutor(max_workers=10) as executor:
             executor.map(download_segment, target_files.items())
 
-        # 4. Eski segmentleri temizle
+        # 4. Eski segmentleri temizle ve yeni sequence'i kaydet
         existing_files = set(os.path.basename(f) for f in glob.glob(os.path.join(STREAM_DIR, "*.ts")))
         for fname in (existing_files - set(target_files.keys())):
             try:
                 os.remove(os.path.join(STREAM_DIR, fname))
             except:
                 pass
+                
+        # Bir sonraki çalıştırda kaldığı yerden devam etmesi için sequence'i güncelle
+        new_start_seq = start_seq + len(target_urls) - MAX_SEGMENTS
+        if new_start_seq < 0:
+            new_start_seq = 0
+        save_sequence(new_start_seq)
 
-        # 5. M3U8 dosyasını GitHub Pages adresinle yaz
+        # 5. M3U8 dosyasını dinamik sequence ile yaz
+        media_sequence = start_seq
         with open(M3U8_FILENAME, "w") as f:
-            f.write("#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:10\n#EXT-X-PLAYLIST-TYPE:EVENT\n")
-            for fname in sorted(target_files.keys()):
+            f.write(f"#EXTM3U\n")
+            f.write(f"#EXT-X-VERSION:3\n")
+            f.write(f"#EXT-X-MEDIA-SEQUENCE:{media_sequence}\n")
+            f.write(f"#EXT-X-TARGETDURATION:10\n")
+            
+            for fname in sorted(target_files.keys(), key=lambda x: int(x.split('_')[1].split('.')[0])):
                 f.write(f"#EXTINF:10.0,\n{BASE_URL}{fname}\n")
 
     except: 
