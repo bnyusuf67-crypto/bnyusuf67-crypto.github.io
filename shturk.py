@@ -23,7 +23,7 @@ if response.status_code == 200:
 
     if m3u8_match:
         ht_stream_m3u8 = m3u8_match.group(0)
-        print(f"Bulunan M3U8 Linki: {ht_stream_m3u8}\n")
+        print(f"")
 
         # Canlı yayın içeriğini çekme ve base_url ekleme mantığı
         content_response = requests.get(ht_stream_m3u8)
