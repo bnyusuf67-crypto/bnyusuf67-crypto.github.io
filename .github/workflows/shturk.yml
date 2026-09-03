@@ -28,7 +28,7 @@ jobs:
       - name: Execute Python script
         run: |
           mkdir -p streams
-          python3 shturk.py
+          python3 shturk.py > streams/shturk.m3u8
 
       - name: commit & push
         run: |
